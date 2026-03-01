@@ -1,96 +1,146 @@
 "use client";
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Maximize,
-  Shuffle,
-  X,
-} from "lucide-react";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { GraduationCap, RotateCcw, Undo2 } from "lucide-react";
 
-import { cn } from "@acme/ui";
-import { Button } from "@acme/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@acme/ui/tooltip";
+import type { Session } from "@acme/auth";
+import { Progress } from "@acme/ui/progress";
 
 import { useFlashcardsModeContext } from "~/contexts/flashcards-mode-context";
-import FlashcardsGameSettingsDialog from "./flashcards-game-settings-dialog";
+import GameResult from "../shared/game-result";
+import FlashcardsGameButtons from "./flashcards-game-buttons";
+import FlipCard from "./flip-card";
+import MessageCard from "./message-card";
 
-interface FlashcardButtonsProps {
+export type FlashcardAnimation = "left" | "right" | "know" | "learning" | null;
+
+interface FlashcardsGameProps {
+  session: Session | null;
   fullscreen?: boolean;
 }
 
-const FlashcardsGameButtons = ({ fullscreen }: FlashcardButtonsProps) => {
+const FlashcardsGame = ({ fullscreen, session }: FlashcardsGameProps) => {
+  const {
+    currentCard,
+    count,
+    hardCount,
+    sorting,
+    reset,
+    reviewHard,
+    progress,
+    handleLeft,
+    handleRight,
+  } = useFlashcardsModeContext();
+
+  const router = useRouter();
   const { id }: { id: string } = useParams();
-  const { shuffle, handleLeft, handleRight, index, sorting, count } =
-    useFlashcardsModeContext();
+
+  const learnFlashcards = () => {
+    router.push(`/study-sets/${id}/learn`);
+  };
+
+  const backToStudySet = () => {
+    router.push(`/study-sets/${id}`);
+  };
+
+  const firstButton = {
+    text:
+      hardCount > 0
+        ? "Review the tough terms"
+        : !fullscreen
+          ? "Learn flashcards"
+          : "Back to set",
+    description:
+      hardCount > 0
+        ? `Review Flashcards again with the ${hardCount} terms you're still learing.`
+        : !fullscreen
+          ? "Learn flashcards"
+          : "Get back to the study set.",
+    callback:
+      hardCount > 0
+        ? reviewHard
+        : !fullscreen
+          ? learnFlashcards
+          : backToStudySet,
+    Icon: !fullscreen ? <GraduationCap size={42} /> : <Undo2 size={32} />,
+  };
+
+  const secondButton = {
+    text: "Reset Flashcards",
+    description: `Study all ${count} terms from the beginning.`,
+    callback: reset,
+    Icon: <RotateCcw size={32} />,
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (sorting) return;
+
+      switch (event.key) {
+        case "ArrowLeft":
+          handleLeft();
+          event.preventDefault();
+          break;
+
+        case "ArrowRight":
+          handleRight();
+          event.preventDefault();
+          break;
+
+        case " ":
+          const card = document.querySelector(
+            "[data-flip-card]"
+          ) as HTMLElement | null;
+
+          card?.click();
+          event.preventDefault();
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleLeft, handleRight, sorting]);
+
+  if (!currentCard) {
+    return (
+      <GameResult
+        hard={hardCount}
+        cardCount={count}
+        firstButton={firstButton}
+        secondButton={secondButton}
+      />
+    );
+  }
 
   return (
-    <div className="relative mb-4 mt-4 flex justify-center">
-      <div className="relative z-10 flex items-center gap-4">
-        <Button
-          variant="outline"
-          onClick={handleLeft}
-          disabled={!sorting && index === 0}
-          className={cn("rounded-full", {
-            "hover:border-red-500 hover:text-red-500": sorting,
-          })}
-          size="icon"
-        >
-          {sorting ? <X /> : <ArrowLeft />}
-        </Button>
-        <span className="select-none font-semibold text-muted-foreground">
-          {index + 1} / {count}
-        </span>
-        <Button
-          variant="outline"
-          onClick={handleRight}
-          disabled={index === count}
-          className={cn("rounded-full", {
-            "hover:border-green-600 hover:text-green-600": sorting,
-          })}
-          size="icon"
-        >
-          {sorting ? <Check /> : <ArrowRight />}
-        </Button>
+    <>
+      <div className="relative flex [perspective:1000px]">
+        {sorting && <MessageCard />}
+        <FlipCard fullscreen={fullscreen} session={session} />
       </div>
-      <TooltipProvider delayDuration={0}>
-        <div className="absolute top-0 flex h-full w-full items-center justify-between">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" onClick={shuffle} size="icon">
-                <Shuffle size={18} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Shuffle</TooltipContent>
-          </Tooltip>
-          <div className="flex gap-2">
-            <FlashcardsGameSettingsDialog />
 
-            {!fullscreen && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href={`/study-sets/${id}/flashcards`}>
-                    <Button variant="outline" size="icon">
-                      <Maximize size={18} />
-                    </Button>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Fullscreen</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </div>
-      </TooltipProvider>
-    </div>
+      <FlashcardsGameButtons fullscreen={fullscreen} />
+
+      <Progress value={progress} className="mb-6" />
+    </>
   );
 };
 
-export default FlashcardsGameButtons;
+export default FlashcardsGame;

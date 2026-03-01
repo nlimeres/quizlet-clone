@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { GraduationCap, RotateCcw, Undo2 } from "lucide-react";
 
@@ -29,6 +30,7 @@ const FlashcardsGame = ({ fullscreen, session }: FlashcardsGameProps) => {
     reviewHard,
     progress,
   } = useFlashcardsModeContext();
+
   const router = useRouter();
   const { id }: { id: string } = useParams();
 
@@ -68,6 +70,58 @@ const FlashcardsGame = ({ fullscreen, session }: FlashcardsGameProps) => {
     callback: reset,
     Icon: <RotateCcw size={32} />,
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      if (sorting) return;
+
+      switch (event.key) {
+        case "ArrowLeft":
+          const learningBtn = document.querySelector(
+            '[data-flashcard-action="learning"]'
+          ) as HTMLButtonElement | null;
+
+          learningBtn?.click();
+          event.preventDefault();
+          break;
+
+        case "ArrowRight":
+          const knowBtn = document.querySelector(
+            '[data-flashcard-action="know"]'
+          ) as HTMLButtonElement | null;
+
+          knowBtn?.click();
+          event.preventDefault();
+          break;
+
+        case " ":
+          const card = document.querySelector(
+            "[data-flashcard-card]"
+          ) as HTMLElement | null;
+
+          card?.click();
+          event.preventDefault();
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sorting]);
 
   if (!currentCard) {
     return (
